@@ -38,16 +38,20 @@ class Smoker:
 
     def smoke(self):
         print(f"{os.getpid()} -> Has ingredient: {self.has_ingredient}")
+        proc = None
 
         while True:
             message: Set[Ingredient] = self.message_queue.get(msg_type=self.input_message_type)
 
             if message == self.needs_ingredients:
+                if proc:
+                    proc.join()
+
                 print(f"{os.getpid()} -> Received: {set_to_string(message)}")
-
-                self._smoke()
-
                 self.message_queue.put(set(), msg_type=self.output_message_type)
+
+                proc = Process(target=self._smoke)
+                proc.start()
 
             else:
                 print(f"{os.getpid()} -> Received: {set_to_string(message)}")
@@ -57,10 +61,9 @@ class Smoker:
 
     @staticmethod
     def _smoke():
-        print(f"{os.getpid()} -> Lighting cigarette")
-        time.sleep(1)
-        print(f"{os.getpid()} -> Cigarette smoked")
-        time.sleep(1)
+        print(f"{os.getppid()} -> Lighting cigarette")
+        time.sleep(random.randrange(1, 10))
+        print(f"{os.getppid()} -> Cigarette smoked")
 
 
 @dataclasses.dataclass
@@ -75,7 +78,6 @@ class Salesman:
     def sell(self):
         while True:
             self.message_queue.get(msg_type=self.input_message_type)
-            time.sleep(2)
 
             all_ingredients = (Ingredient.PAPER, Ingredient.TOBACCO, Ingredient.MATCHES)
             random_ingredients = set(random.sample(all_ingredients, 2))
