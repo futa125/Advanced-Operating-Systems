@@ -62,7 +62,7 @@ class Smoker:
     @staticmethod
     def _smoke():
         print(f"{os.getppid()} -> Lighting cigarette")
-        time.sleep(random.randrange(1, 10))
+        time.sleep(random.randrange(2, 10))
         print(f"{os.getppid()} -> Cigarette smoked")
 
 
@@ -78,6 +78,7 @@ class Salesman:
     def sell(self):
         while True:
             self.message_queue.get(msg_type=self.input_message_type)
+            time.sleep(1)
 
             all_ingredients = (Ingredient.PAPER, Ingredient.TOBACCO, Ingredient.MATCHES)
             random_ingredients = set(random.sample(all_ingredients, 2))
