@@ -1,12 +1,15 @@
 import dataclasses
 import os
 import random
+import signal
 import time
 from enum import Enum
 from multiprocessing import Process
 from typing import Set
 
 from ipcqueue import sysvmq
+
+message_queue_key = 125125
 
 
 class Ingredient(Enum):
@@ -89,7 +92,6 @@ def set_to_string(message: set[Ingredient, Ingredient]) -> str:
 
 
 def main():
-    message_queue_key = 125125
     sysvmq.Queue(message_queue_key).put({}, block=True, msg_type=4)
 
     smoker1 = Smoker(Ingredient.PAPER, {Ingredient.TOBACCO, Ingredient.MATCHES}, 1, 2, sysvmq.Queue(message_queue_key))
@@ -114,5 +116,15 @@ def main():
         process.join()
 
 
+def handle_exit(_sig, _frame):
+    raise SystemExit
+
+
 if __name__ == "__main__":
-    main()
+    signal.signal(signal.SIGINT, handle_exit)
+    signal.signal(signal.SIGTERM, handle_exit)
+
+    try:
+        main()
+    except (KeyboardInterrupt, SystemExit):
+        sysvmq.Queue(message_queue_key).close()
