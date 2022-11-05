@@ -4,6 +4,7 @@ import random
 import time
 from enum import Enum
 from multiprocessing import Process
+from typing import Set
 
 from ipcqueue import sysvmq
 
@@ -23,7 +24,7 @@ class Ingredient(Enum):
 @dataclasses.dataclass
 class Smoker:
     has_ingredient: Ingredient
-    needs_ingredients: set[Ingredient, Ingredient]
+    needs_ingredients: Set[Ingredient]
 
     input_message_type: int
     output_message_type: int
@@ -36,7 +37,7 @@ class Smoker:
         print(f"{os.getpid()} -> Has ingredient: {self.has_ingredient}")
 
         while True:
-            message: set[Ingredient, Ingredient] = self.message_queue.get(msg_type=self.input_message_type)
+            message: Set[Ingredient] = self.message_queue.get(msg_type=self.input_message_type)
 
             if message == self.needs_ingredients:
                 print(f"{os.getpid()} -> Received: {set_to_string(message)}")
