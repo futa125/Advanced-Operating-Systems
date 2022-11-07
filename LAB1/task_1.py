@@ -1,69 +1,116 @@
+from __future__ import annotations
+
 import dataclasses
 import os
+import pickle
 import random
 import signal
+import sys
 import time
-from enum import Enum
+from enum import Enum, auto
 from multiprocessing import Process
-from typing import Set
+from typing import Union
 
-from ipcqueue import sysvmq
+import sysv_ipc
 
-message_queue_key = 125125
+message_queue_key = 125
+message_queue = sysv_ipc.MessageQueue(message_queue_key, flags=sysv_ipc.IPC_CREX)
 
 
 class Ingredient(Enum):
-    PAPER = "Paper"
-    TOBACCO = "Tobacco"
-    MATCHES = "Matches"
+    PAPER = auto()
+    TOBACCO = auto()
+    MATCHES = auto()
 
     def __str__(self):
-        return self.value
+        return self.name.capitalize()
 
-    def __repr__(self):
-        return self.value
+
+@dataclasses.dataclass
+class IngredientPair:
+    first: Ingredient
+    second: Ingredient
+
+    def __eq__(self, other):
+        if not self or not other:
+            return False
+
+        return {self.first, self.second} == {other.first, other.second}
+
+    def __str__(self):
+        if self.first.value < self.second.value:
+            return f"{self.first.name.capitalize()}, {self.second.name.capitalize()}"
+
+        return f"{self.second.name.capitalize()}, {self.first.name.capitalize()}"
+
+
+@dataclasses.dataclass
+class Message:
+    ingredients: Union[IngredientPair, None]
+    type: int
+
+    def __str__(self):
+        return "Ingredients: {}, Type: {}".format(self.ingredients, self.type)
+
+    def serialize(self) -> bytes:
+        return pickle.dumps(self)
+
+    @staticmethod
+    def deserialize(message: bytes) -> Message:
+        return pickle.loads(message)
 
 
 @dataclasses.dataclass
 class Smoker:
     has_ingredient: Ingredient
-    needs_ingredients: Set[Ingredient]
+    needs_ingredients: IngredientPair
 
     input_message_type: int
     output_message_type: int
 
-    message_queue: sysvmq.Queue
+    message_queue: sysv_ipc.MessageQueue
 
-    pid: int = os.getpid()
+    pid: int = 0
 
     def smoke(self):
-        print(f"{os.getpid()} -> Has ingredient: {self.has_ingredient}")
-        proc = None
+        self.pid = os.getpid()
+        sys.stdout.write(f"{self.pid} -> Has ingredient: '{self.has_ingredient}'\n")
 
         while True:
-            message: Set[Ingredient] = self.message_queue.get(msg_type=self.input_message_type)
+            _message, _type = self.message_queue.receive(type=self.input_message_type)
+            message: Message = Message.deserialize(_message)
 
-            if message == self.needs_ingredients:
-                if proc:
-                    proc.join()
+            if message.ingredients == self.needs_ingredients:
+                sys.stdout.write(f"{self.pid} -> Received message: '{message}'\n")
 
-                print(f"{os.getpid()} -> Received: {set_to_string(message)}")
-                self.message_queue.put(set(), msg_type=self.output_message_type)
+                sys.stdout.write(f"{self.pid} -> Entering critical section\n")
+
+                sys.stdout.write(f"{self.pid} -> Taking ingredients from the table: '{message.ingredients}'\n")
+
+                sys.stdout.write(f"{self.pid} -> Exiting critical section\n")
+
+                message = Message(None, self.output_message_type)
+
+                self.message_queue.send(message.serialize(), type=self.output_message_type)
+
+                sys.stdout.write(f"{self.pid} -> Sent message: '{message}'\n")
 
                 proc = Process(target=self._smoke)
                 proc.start()
+                proc.join()
 
             else:
-                print(f"{os.getpid()} -> Received: {set_to_string(message)}")
-                print(f"{os.getpid()} -> Passing to next smoker")
+                sys.stdout.write(f"{self.pid} -> Received message: '{message}'\n")
 
-                self.message_queue.put(message, msg_type=self.output_message_type)
+                message.type = self.output_message_type
+                self.message_queue.send(message.serialize(), type=self.output_message_type)
+
+                sys.stdout.write(f"{self.pid} -> Sent message: '{message}'\n")
 
     @staticmethod
     def _smoke():
-        print(f"{os.getppid()} -> Lighting cigarette")
-        time.sleep(random.randrange(2, 10))
-        print(f"{os.getppid()} -> Cigarette smoked")
+        sys.stdout.write(f"{os.getppid()} -> Started smoking\n")
+        sys.stdout.write(f"{os.getppid()} -> Finished smoking\n")
 
 
 @dataclasses.dataclass
@@ -71,36 +118,42 @@ class Salesman:
     input_message_type: int
     output_message_type: int
 
-    message_queue: sysvmq.Queue
+    message_queue: sysv_ipc.MessageQueue
 
-    pid: int = os.getpid()
+    pid: int = 0
 
     def sell(self):
+        self.pid = os.getppid()
+
         while True:
-            self.message_queue.get(msg_type=self.input_message_type)
+            _message, _type = self.message_queue.receive(type=self.input_message_type)
             time.sleep(1)
 
-            all_ingredients = (Ingredient.PAPER, Ingredient.TOBACCO, Ingredient.MATCHES)
-            random_ingredients = set(random.sample(all_ingredients, 2))
+            message = Message.deserialize(_message)
 
-            print(f"\n{self.pid} -> Selling: {set_to_string(random_ingredients)}")
-            self.message_queue.put(random_ingredients, msg_type=self.output_message_type)
+            sys.stdout.write(f"\n{self.pid} -> Received message: '{message}'\n")
 
+            random_ingredients = IngredientPair(*random.sample(list(Ingredient), 2))
 
-def set_to_string(message: set[Ingredient, Ingredient]) -> str:
-    if message:
-        return f"'{', '.join(sorted([str(x) for x in message]))}'"
+            sys.stdout.write(f"{self.pid} -> Placing ingredients on the table: '{random_ingredients}'\n")
 
-    return "''"
+            message = Message(random_ingredients, self.output_message_type)
+            self.message_queue.send(message.serialize(), type=self.output_message_type)
+
+            sys.stdout.write(f"{self.pid} -> Sent message: '{message}'\n")
 
 
 def main():
-    sysvmq.Queue(message_queue_key).put({}, block=True, msg_type=4)
+    message_queue.send(pickle.dumps(Message(None, 4)), type=4)
 
-    smoker1 = Smoker(Ingredient.PAPER, {Ingredient.TOBACCO, Ingredient.MATCHES}, 1, 2, sysvmq.Queue(message_queue_key))
-    smoker2 = Smoker(Ingredient.TOBACCO, {Ingredient.PAPER, Ingredient.MATCHES}, 2, 3, sysvmq.Queue(message_queue_key))
-    smoker3 = Smoker(Ingredient.MATCHES, {Ingredient.PAPER, Ingredient.TOBACCO}, 3, 4, sysvmq.Queue(message_queue_key))
-    salesman = Salesman(4, 1, sysvmq.Queue(message_queue_key))
+    smoker1 = Smoker(Ingredient.PAPER, IngredientPair(Ingredient.TOBACCO, Ingredient.MATCHES), 1, 2,
+                     sysv_ipc.MessageQueue(message_queue_key))
+    smoker2 = Smoker(Ingredient.TOBACCO, IngredientPair(Ingredient.PAPER, Ingredient.MATCHES), 2, 3,
+                     sysv_ipc.MessageQueue(message_queue_key))
+    smoker3 = Smoker(Ingredient.MATCHES, IngredientPair(Ingredient.PAPER, Ingredient.TOBACCO), 3, 4,
+                     sysv_ipc.MessageQueue(message_queue_key))
+
+    salesman = Salesman(4, 1, sysv_ipc.MessageQueue(message_queue_key))
 
     processes = []
     process = Process(target=smoker1.smoke)
@@ -130,4 +183,4 @@ if __name__ == "__main__":
     try:
         main()
     except (KeyboardInterrupt, SystemExit):
-        sysvmq.Queue(message_queue_key).close()
+        message_queue.remove()
