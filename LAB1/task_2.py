@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import json
+import logging
 import os
 import pickle
 import random
@@ -10,23 +12,19 @@ import sys
 import time
 from enum import Enum
 from multiprocessing import Process
-from typing import Dict, Tuple, List, Union, BinaryIO
+from typing import Dict, List, Union
 
 import sysv_ipc
 
-read_index = 0
-write_index = 1
-pipes: Dict[int, Tuple[BinaryIO, BinaryIO]] = {}
-
-number_of_processes = 3
-processes: List[Process] = []
-
-database_max_access_count = 5
-
+pipes: Dict[int, Pipe] = {}
 shared_memory_key = 125
 shared_memory = sysv_ipc.SharedMemory(shared_memory_key, flags=sysv_ipc.IPC_CREX)
 
-message_size = 128
+
+@dataclasses.dataclass
+class Pipe:
+    r: int
+    w: int
 
 
 @dataclasses.dataclass
@@ -70,6 +68,7 @@ class Message:
     type: MessageType
     id: int
     clock_value: int
+    message_size: int
 
     def __str__(self):
         return f"Message Type: {self.type.value}, User ID: {self.id}, Clock Value: {self.clock_value}"
@@ -78,7 +77,7 @@ class Message:
         return f"Message Type: {self.type.value}, User ID: {self.id}, Clock Value: {self.clock_value}"
 
     def serialize(self) -> bytes:
-        return pickle.dumps(self).ljust(message_size, b"\x00")
+        return pickle.dumps(self).ljust(self.message_size, b"\x00")
 
     @staticmethod
     def deserialize(serialized_message: bytes) -> Message:
@@ -89,13 +88,15 @@ class Message:
 class DatabaseUser:
     id: int
     clock_value: int
+    number_of_processes: int
+    message_size: int
+    database_max_access_count: int
     wants_to_enter_critical_section: bool = True
 
     def send_deferred_responses(self, deferred_responses: List[Message]):
         for req in deferred_responses:
-            response = Message(MessageType.Response, self.id, req.clock_value)
-            pipes[req.id][write_index].write(response.serialize())
-            pipes[req.id][write_index].flush()
+            response = Message(MessageType.Response, self.id, req.clock_value, self.message_size)
+            os.write(pipes[req.id].w, response.serialize())
             sys.stdout.write(f"Sending Deferred Response: {response}\n")
 
     def enter_critical_section(self):
@@ -107,7 +108,7 @@ class DatabaseUser:
         new_entry = DatabaseEntry(self.id, self.clock_value, old_entry.access_count + 1)
         database.set_entry(new_entry)
 
-        if new_entry.access_count == database_max_access_count:
+        if new_entry.access_count == self.database_max_access_count:
             self.wants_to_enter_critical_section = False
 
         shared_memory.write(database.serialize())
@@ -123,7 +124,7 @@ class DatabaseUser:
         max_received_message_clock_value = 0
 
         while True:
-            msg = Message.deserialize(pipes[self.id][read_index].read(message_size))
+            msg = Message.deserialize(os.read(pipes[self.id].r, self.message_size))
             max_received_message_clock_value = max(max_received_message_clock_value, msg.clock_value)
 
             if msg.type == MessageType.Request:
@@ -132,9 +133,8 @@ class DatabaseUser:
                     or self.clock_value > msg.clock_value
                     or (self.clock_value == msg.clock_value and self.id > msg.id)
                 ):
-                    response = Message(MessageType.Response, self.id, msg.clock_value)
-                    pipes[msg.id][write_index].write(response.serialize())
-                    pipes[msg.id][write_index].flush()
+                    response = Message(MessageType.Response, self.id, msg.clock_value, self.message_size)
+                    os.write(pipes[msg.id].w, response.serialize())
                     sys.stdout.write(f"Sending Response: {msg}\n")
                 else:
                     deferred_responses.append(msg)
@@ -144,7 +144,7 @@ class DatabaseUser:
                 response_count += 1
                 sys.stdout.write(f"Saving Response: {msg}\n")
 
-            if response_count == (number_of_processes - 1):
+            if response_count == (self.number_of_processes - 1):
                 new_clock_value = time.time_ns()
                 if new_clock_value > max_received_message_clock_value:
                     self.clock_value = new_clock_value
@@ -159,20 +159,18 @@ class DatabaseUser:
         if not self.wants_to_enter_critical_section:
             return
 
-        request = Message(MessageType.Request, self.id, self.clock_value)
+        request = Message(MessageType.Request, self.id, self.clock_value, self.message_size)
 
         for other_user_id, other_user_connections in pipes.items():
             if other_user_id == self.id:
                 continue
 
-            other_user_connections[write_index].write(request.serialize())
-            other_user_connections[write_index].flush()
-
+            os.write(other_user_connections.w, request.serialize())
             sys.stdout.write(f"Sending Request: {request}\n")
 
 
-def start_database_user(user_id: int):
-    db_user = DatabaseUser(user_id, time.time_ns())
+def start_database_user(user_id: int, number_of_processes: int, message_size: int, database_max_access_count: int):
+    db_user = DatabaseUser(user_id, time.time_ns(), number_of_processes, message_size, database_max_access_count)
 
     while True:
         db_user.send_requests()
@@ -186,15 +184,22 @@ def handle_exit(_sig, _frame):
 
 
 def main():
-    database = Database({i: DatabaseEntry(i, 0, 0) for i in range(number_of_processes)})
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--processes", help="number of processes (database users) to create", type=int, default=3)
+    args = parser.parse_args()
+
+    database = Database({i: DatabaseEntry(i, 0, 0) for i in range(args.processes)})
     shared_memory.write(database.serialize())
 
-    for i in range(number_of_processes):
-        rd, wd = os.pipe()
-        pipes[i] = (os.fdopen(rd, "rb"), os.fdopen(wd, "wb"))
+    for i in range(args.processes):
+        r, w = os.pipe()
+        pipes[i] = Pipe(r, w)
 
-    for i in range(number_of_processes):
-        process = Process(target=start_database_user, args=(i,))
+    message_size = 256
+    database_max_access_count = 5
+    processes = []
+    for i in range(args.processes):
+        process = Process(target=start_database_user, args=(i, args.processes, message_size, database_max_access_count))
         processes.append(process)
         process.start()
 
@@ -208,7 +213,7 @@ if __name__ == "__main__":
 
     try:
         main()
-    except (SystemExit, KeyboardInterrupt):
+    except (KeyboardInterrupt, SystemExit):
         shared_memory.remove()
-        for r, w in pipes.values():
-            r.close(), w.close()
+        for pipe in pipes.values():
+            os.close(pipe.r), os.close(pipe.w)
