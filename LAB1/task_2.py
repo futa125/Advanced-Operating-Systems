@@ -120,17 +120,17 @@ class DatabaseUser:
         response_count = 0
         deferred_responses: List[Message] = []
 
-        max_received_message_clock_value = 0
+        current_clock_value = self.clock_value
 
         while True:
             msg = Message.deserialize(os.read(pipes[self.id].r, self.message_size))
-            max_received_message_clock_value = max(max_received_message_clock_value, msg.clock_value)
+            self.clock_value = max(self.clock_value, msg.clock_value) + 1
 
             if msg.type == MessageType.Request:
                 if (
                     not self.wants_to_enter_critical_section
-                    or self.clock_value > msg.clock_value
-                    or (self.clock_value == msg.clock_value and self.id > msg.id)
+                    or current_clock_value > msg.clock_value
+                    or (current_clock_value == msg.clock_value and self.id > msg.id)
                 ):
                     response = Message(MessageType.Response, self.id, msg.clock_value, self.message_size)
                     os.write(pipes[msg.id].w, response.serialize())
@@ -144,12 +144,6 @@ class DatabaseUser:
                 sys.stdout.write(f"Saving Response: {msg}\n")
 
             if response_count == (self.number_of_processes - 1):
-                new_clock_value = time.time_ns()
-                if new_clock_value > max_received_message_clock_value:
-                    self.clock_value = new_clock_value
-                else:
-                    self.clock_value = max_received_message_clock_value + 1
-
                 break
 
         return deferred_responses
@@ -169,7 +163,7 @@ class DatabaseUser:
 
 
 def start_database_user(user_id: int, number_of_processes: int, message_size: int, database_max_access_count: int):
-    db_user = DatabaseUser(user_id, time.time_ns(), number_of_processes, message_size, database_max_access_count)
+    db_user = DatabaseUser(user_id, random.randrange(1, number_of_processes), number_of_processes, message_size, database_max_access_count)
 
     while True:
         db_user.send_requests()
