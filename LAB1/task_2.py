@@ -163,7 +163,8 @@ class DatabaseUser:
 
 
 def start_database_user(user_id: int, number_of_processes: int, message_size: int, database_max_access_count: int):
-    db_user = DatabaseUser(user_id, random.randrange(1, number_of_processes), number_of_processes, message_size, database_max_access_count)
+    db_user = DatabaseUser(user_id, random.randrange(1, number_of_processes),
+                           number_of_processes, message_size, database_max_access_count)
 
     while True:
         db_user.send_requests()
