@@ -1,0 +1,1 @@
+cmd_/home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/modules.order := {   echo /home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/shofer.ko; :; } | awk '!x[$$0]++' - > /home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/modules.order

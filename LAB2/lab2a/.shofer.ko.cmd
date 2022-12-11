@@ -1,0 +1,1 @@
+cmd_/home/futa125/Advanced-Operating-Systems/LAB2/lab2a/shofer.ko := ld -r -EL  -maarch64elf -z noexecstack --build-id=sha1  -T scripts/module.lds -o /home/futa125/Advanced-Operating-Systems/LAB2/lab2a/shofer.ko /home/futa125/Advanced-Operating-Systems/LAB2/lab2a/shofer.o /home/futa125/Advanced-Operating-Systems/LAB2/lab2a/shofer.mod.o;  true

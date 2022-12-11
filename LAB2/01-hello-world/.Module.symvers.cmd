@@ -1,0 +1,1 @@
+cmd_/home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/Module.symvers := sed 's/\.ko$$/\.o/' /home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/modules.order | scripts/mod/modpost -m -a  -o /home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/Module.symvers -e -i Module.symvers   -T -
