@@ -274,7 +274,7 @@ static ssize_t shofer_read(struct file *filp, char __user *ubuf, size_t count,
 
 	spin_lock(&out_buff->key);
 
-	dump_buffer("out_dev-end:out_buff:", out_buff);
+	dump_buffer("out_dev-start:out_buff:", out_buff);
 
 	retval = kfifo_to_user(fifo, (char __user *) ubuf, count, &copied);
 	if (retval)
@@ -301,7 +301,7 @@ static ssize_t shofer_write(struct file *filp, const char __user *ubuf,
 
 	spin_lock(&in_buff->key);
 
-	dump_buffer("in_dev-end:in_buff:", in_buff);
+	dump_buffer("in_dev-start:in_buff:", in_buff);
 
 	retval = kfifo_from_user(fifo, (char __user *) ubuf, count, &copied);
 	if (retval)
@@ -309,7 +309,7 @@ static ssize_t shofer_write(struct file *filp, const char __user *ubuf,
 	else
 		retval = copied;
 
-	dump_buffer("in_dev-end:in_buff:", out_buff);
+	dump_buffer("in_dev-end:in_buff:", in_buff);
 
 	spin_unlock(&in_buff->key);
 
@@ -352,6 +352,8 @@ static long control_ioctl (struct file *filp, unsigned int cmd, unsigned long ar
 			else { /* should't happen! */
 				klog(KERN_WARNING, "kfifo_get failed\n");
 			}
+		} else {
+			break;
 		}
 	}
 
