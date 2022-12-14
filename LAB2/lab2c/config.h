@@ -17,7 +17,7 @@
 #define LICENSE		"Dual BSD/GPL"
 
 #define BUFFER_SIZE	8
-#define MAX_THREAD_COUNT 10
+#define MAX_THREAD_COUNT 20
 
 /* Circular buffer */
 struct buffer {

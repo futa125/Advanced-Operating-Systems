@@ -27,7 +27,7 @@ void read_child(void *data) {
     int fd = open(FIB_DEV, O_RDONLY);
 
     if (fd < 0) {
-        perror("Failed to open character device");
+        perror("failed to open");
         return;
     }
 
@@ -41,17 +41,18 @@ void read_child(void *data) {
 
 int main()
 {
-    pthread_t t[10];
-    char strings[][3] = {"aaa", "bbb", "CCC", "ddd", "eee", "fff", "ggg", "hhh", "iii", "jjj"};
+    pthread_t t[20];
+    char strings[][3] = {"aaa", "bbb", "CCC", "ddd", "eee", "fff", "ggg", "hhh", "iii", "jjj",
+                         "kkk", "lll", "mmm", "nnn", "ooo", "ppp", "qqq", "rrr", "sss", "ttt"};
 
-    for (int i=0; i<5; ++i) {
+    for (int i=0; i<10; ++i) {
         pthread_create(&(t[i]), NULL, (void*)read_child, strings[i]);
     }
-    for (int i=5; i<10; ++i) {
+    for (int i=10; i<20; ++i) {
         pthread_create(&(t[i]), NULL, (void*)write_child, strings[i]);
     }
 
-    for (int i=0; i<10; ++i) {
+    for (int i=0; i<20; ++i) {
         pthread_join(t[i], NULL);
     }
 

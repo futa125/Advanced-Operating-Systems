@@ -45,13 +45,13 @@ __used __section("__versions") = {
 	{ 0xad900ce9, "cdev_del" },
 	{ 0x4578f528, "__kfifo_to_user" },
 	{ 0x1000e51, "schedule" },
+	{ 0x3213f038, "mutex_unlock" },
 	{ 0x3eeb2322, "__wake_up" },
 	{ 0x30a80826, "__kfifo_from_user" },
 	{ 0x92540fbf, "finish_wait" },
 	{ 0x8c26d495, "prepare_to_wait_event" },
 	{ 0xfe487975, "init_wait_entry" },
 	{ 0x800473f, "__cond_resched" },
-	{ 0x3213f038, "mutex_unlock" },
 	{ 0x89940875, "mutex_lock_interruptible" },
 	{ 0x8da6585d, "__stack_chk_fail" },
 	{ 0x281823c5, "__kfifo_out_peek" },
@@ -61,4 +61,4 @@ __used __section("__versions") = {
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "B91E41574A46EA22376B145");
+MODULE_INFO(srcversion, "EE5C965F8EEE917B94E4AED");

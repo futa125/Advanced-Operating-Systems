@@ -287,17 +287,16 @@ static ssize_t shofer_write(struct file *filp, const char __user *ubuf,
 	struct kfifo *fifo = &buffer->fifo;
 	unsigned int copied;
 
-	if (mutex_lock_interruptible(&shofer->wlock))
-		return -ERESTARTSYS;
-
 	if (count > buffer_size) {
 		printk("%d: attempting to write data larger than buffer size, data: %ld > buffer: %d\n", 
 				current->pid,
 				count, 
 				buffer_size);
-		mutex_unlock(&shofer->wlock);
 		return -1;
 	}
+
+	if (mutex_lock_interruptible(&shofer->wlock))
+		return -ERESTARTSYS;
 	
 	if (kfifo_avail(fifo) < count) {
 		printk("%d: waiting write, not enough space in buffer, required: %ld, available: %d\n", 
