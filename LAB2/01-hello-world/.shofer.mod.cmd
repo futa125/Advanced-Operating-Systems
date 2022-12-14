@@ -1,1 +1,0 @@
-cmd_/home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/shofer.mod := { echo  /home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/shofer.o;  echo; } > /home/futa125/Advanced-Operating-Systems/LAB2/01-hello-world/shofer.mod

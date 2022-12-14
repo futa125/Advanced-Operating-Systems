@@ -1,1 +1,0 @@
-cmd_/home/futa125/Advanced-Operating-Systems/LAB2/02-simple-device/shofer.mod := { echo  /home/futa125/Advanced-Operating-Systems/LAB2/02-simple-device/shofer.o;  echo; } > /home/futa125/Advanced-Operating-Systems/LAB2/02-simple-device/shofer.mod
